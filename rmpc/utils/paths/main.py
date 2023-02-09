@@ -1,6 +1,5 @@
 from pathlib import Path
-from typing import List, Iterable
-
+from typing import List, Iterable, Union
 
 __all__ = [
     "get_dir",
@@ -9,22 +8,23 @@ __all__ = [
 
 
 def get_root_dir(path: str | Path = None, **kwargs):
-    kwargs.setdefault("match_first_git_dir", False)
-    kwargs.setdefault("expected_root_names", None)
-
-    match_first_git_dir = kwargs["match_first_git_dir"]
-    expected_root_names = kwargs["expected_root_names"]
+    match_first_git_dir: bool = kwargs.setdefault("match_first_git_dir", False)
+    expected_root_names: Union[str, Path, List[Union[str, Path]]] = kwargs.setdefault("expected_root_names", [])
 
     if path is None:
-        path = Path(__file__)
+        path = Path(__file__).parent.absolute()
 
     if not isinstance(path, Path):
-        path = Path(path)
+        path = Path(path).absolute()
 
     if not path.exists():
         raise ValueError("Invalid Path: %r" % path)
 
-    directory = path if path.is_dir() else path.parent
+    if not path.is_dir():
+        directory = path.parent.absolute()
+
+    else:
+        directory = path.absolute()
 
     if match_first_git_dir:
         git_dir = directory.joinpath(".git")
@@ -32,15 +32,17 @@ def get_root_dir(path: str | Path = None, **kwargs):
             return directory
 
     if expected_root_names:
-        ern = expected_root_names
-        expected_root_names = (
-            [getattr(p, "name", p).lower() for p in ern]
-        ) if isinstance(expected_root_names, (List, Iterable)) else [getattr(ern, "name", ern).lower()]
+        ern: Union[str, Path, List[Union[str, Path]]] = expected_root_names
+        if isinstance(ern, (str, Path)):
+            ern = [Path(ern).name]
 
-        if directory.name.lower() in expected_root_names:
+        else:
+            ern = [Path(p).name for p in ern]
+
+        if directory.name in ern:
             return directory
 
-    return get_root_dir(directory, **kwargs)
+    return get_root_dir(directory.parent, **kwargs)
 
 
 def get_dir(path: str | Path, **kwargs):
@@ -59,11 +61,11 @@ def get_dir(path: str | Path, **kwargs):
     if not isinstance(path, Path):
         path = Path(path)
 
-    if not path.is_dir():
-        raise ValueError("Path is not a valid Directory: %r" % path)
-
     if not path.exists() and create_dir:
         path.mkdir(exist_ok=force_create_dir)
+
+    if not path.is_dir():
+        raise ValueError("Path is not a valid Directory: %r" % path)
 
     if path.exists() and path.is_dir():
         return path
